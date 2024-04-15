@@ -1,3 +1,4 @@
+```
 <dependency>
     <groupId>io.opentelemetry</groupId>
     <artifactId>opentelemetry-api</artifactId>
@@ -8,7 +9,8 @@
     <artifactId>opentelemetry-exporter-datadog</artifactId>
     <version>1.0.0</version> <!-- or the latest version -->
 </dependency>
-
+```
+```
 import io.opentelemetry.api.metrics.*;
 import io.opentelemetry.api.metrics.common.Labels;
 import io.opentelemetry.exporter.datadog.DatadogMetricExporter;
@@ -54,3 +56,4 @@ public class CustomMetricExample {
                 .buildAndRegisterGlobal();
     }
 }
+```
