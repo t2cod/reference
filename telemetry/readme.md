@@ -281,3 +281,120 @@ public class CustomMetricExample implements MetricExporter {
     }
 }
 ```
+
+
+```
+import io.opentelemetry.api.OpenTelemetry;
+import io.opentelemetry.api.metrics.LongCounter;
+import io.opentelemetry.api.metrics.Meter;
+import io.opentelemetry.api.metrics.MeterProvider;
+import io.opentelemetry.api.metrics.common.Labels;
+import io.opentelemetry.exporter.logging.LoggingMetricExporter;
+import io.opentelemetry.exporter.logging.LoggingMetricExporterBuilder;
+import io.opentelemetry.sdk.metrics.SdkMeterProvider;
+
+import java.io.OutputStreamWriter;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
+import java.util.concurrent.TimeUnit;
+
+public class DatadogMetricsSender {
+
+    private static final String DATADOG_API_URL = "https://api.datadoghq.com/api/v1/series?api_key=";
+
+    public static void main(String[] args) {
+        // Create a meter provider
+        MeterProvider meterProvider = SdkMeterProvider.builder().buildAndRegisterGlobal();
+
+        // Create a meter
+        Meter meter = meterProvider.get("custom_metrics");
+
+        // Create a counter metric
+        LongCounter counterMetric = meter.counterBuilder("custom_counter")
+                .setDescription("This is a custom counter metric")
+                .setUnit("1")
+                .build();
+
+        // Increment the counter metric
+        counterMetric.add(1, Labels.empty());
+
+        // Create an OpenTelemetry object to get the default OpenTelemetry instance
+        OpenTelemetry openTelemetry = OpenTelemetrySdk.get();
+
+        // Add a logging metric exporter (for demonstration)
+        LoggingMetricExporter exporter = new LoggingMetricExporterBuilder().build();
+        meterProvider.getMetricProducer().registerMetricExporter(exporter);
+
+        // Optionally, you can add other exporters such as Datadog exporter here
+        MeterExporter datadogExporter = new MeterExporter();
+
+        // Register the exporter
+        meterProvider.getMetricProducer().registerMetricExporter(datadogExporter);
+
+        // Flush the exporter before shutdown
+        Runtime.getRuntime().addShutdownHook(new Thread(exporter::shutdown));
+        Runtime.getRuntime().addShutdownHook(new Thread(datadogExporter::shutdown));
+
+        // Sleep to demonstrate metric collection
+        try {
+            TimeUnit.SECONDS.sleep(5);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+    }
+
+    static class MeterExporter implements MetricExporter {
+        @Override
+        public void export(Collection<MetricRecord> records) {
+            for (MetricRecord record : records) {
+                // Iterate through metric records and send each one to Datadog
+                try {
+                    sendMetric(record.getName(), record.getValue(), System.currentTimeMillis() / 1000, "YOUR_API_KEY");
+                } catch (Exception e) {
+                    System.err.println("Failed to send metric to Datadog: " + e.getMessage());
+                }
+            }
+        }
+
+        @Override
+        public CompletableResultCode flush() {
+            // No need to implement flushing for HTTP exporter
+            return CompletableResultCode.ofSuccess();
+        }
+
+        @Override
+        public CompletableResultCode shutdown() {
+            // Clean up resources if needed
+            return CompletableResultCode.ofSuccess();
+        }
+
+        private void sendMetric(String metricName, long value, long timestamp, String apiKey) throws Exception {
+            // Create JSON payload
+            String payload = String.format("[{\"metric\":\"%s\",\"points\":[[%d,%d]],\"type\":\"gauge\"}]", metricName, timestamp, value);
+
+            // Create HTTP connection
+            URL url = new URL(DATADOG_API_URL + apiKey);
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("POST");
+            conn.setRequestProperty("Content-Type", "application/json");
+            conn.setDoOutput(true);
+
+            // Write payload to the connection
+            try (OutputStreamWriter writer = new OutputStreamWriter(conn.getOutputStream(), StandardCharsets.UTF_8)) {
+                writer.write(payload);
+                writer.flush();
+            }
+
+            // Check response code
+            int responseCode = conn.getResponseCode();
+            if (responseCode != HttpURLConnection.HTTP_OK) {
+                throw new Exception("Failed to send metric to Datadog. Response code: " + responseCode);
+            }
+
+            // Close connection
+            conn.disconnect();
+        }
+    }
+}
+```
