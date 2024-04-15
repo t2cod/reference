@@ -170,3 +170,114 @@ io/opentelemetry/exporter/opentelemetry-exporter-datadog/1.19.0-SNAPSHOT/
 Create the directories if they don't already exist.
 Copy the downloaded opentelemetry-exporter-datadog-1.19.0-SNAPSHOT.jar file to the directory you created in the previous step.
 Update your project's pom.xml file to reference the local artifact:
+
+
+
+```
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
+import io.opentelemetry.api.common.Attributes;
+import io.opentelemetry.api.metrics.LongCounter;
+import io.opentelemetry.api.metrics.Meter;
+import io.opentelemetry.api.metrics.MeterProvider;
+import io.opentelemetry.sdk.common.CompletableResultCode;
+import io.opentelemetry.sdk.metrics.SdkMeterProvider;
+import io.opentelemetry.sdk.metrics.data.MetricData;
+import io.opentelemetry.sdk.metrics.export.MetricExporter;
+import io.opentelemetry.sdk.resources.Resource;
+
+import java.io.IOException;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
+import java.util.Collection;
+
+public class CustomMetricExample implements MetricExporter {
+    public static void main(String[] args) {
+        // Initialize the OpenTelemetry SDK
+        MeterProvider meterProvider = SdkMeterProvider.builder()
+                .setResource(Resource.create(Attributes.of("service.name", "my-service")))
+                .build();
+
+        // Register the custom exporter
+        meterProvider.addMetricReader(new CustomMetricExample());
+
+        // Get a meter instance
+        Meter meter = meterProvider.get("my-service");
+
+        // Create a custom metric
+        LongCounter counter = meter.counterBuilder("my_custom_metric")
+                .setDescription("A custom metric")
+                .setUnit("requests")
+                .build();
+
+        // Record a value for the custom metric
+        counter.add(10, Attributes.of("endpoint", "/myEndpoint"));
+    }
+
+    @Override
+    public CompletableResultCode export(Collection<MetricData> metrics) {
+        for (MetricData metric : metrics) {
+            try {
+                sendMetricToDatadog(metric);
+            } catch (IOException e) {
+                return CompletableResultCode.ofFailure();
+            }
+        }
+        return CompletableResultCode.ofSuccess();
+    }
+
+    private void sendMetricToDatadog(MetricData metric) throws IOException {
+        // Construct the Datadog API request
+        String metricName = metric.getInstruments().get(0).getName();
+        double metricValue = metric.getInstruments().get(0).getLastValue();
+        Attributes attributes = metric.getInstruments().get(0).getAttributes();
+
+        JsonObject payload = new JsonObject();
+        JsonArray series = new JsonArray();
+        JsonObject dataPoint = new JsonObject();
+        dataPoint.addProperty("metric", metricName);
+        dataPoint.addProperty("points", System.currentTimeMillis() / 1000 + "," + metricValue);
+        dataPoint.add("tags", buildTagsJson(attributes));
+        series.add(dataPoint);
+        payload.add("series", series);
+
+        URL url = new URL("https://api.datadoghq.com/api/v1/series");
+        HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+        connection.setRequestMethod("POST");
+        connection.setRequestProperty("Content-Type", "application/json");
+        connection.setRequestProperty("DD-API-KEY", "your_datadog_api_key");
+
+        connection.setDoOutput(true);
+        try (OutputStream os = connection.getOutputStream()) {
+            os.write(payload.toString().getBytes(StandardCharsets.UTF_8));
+        }
+
+        int responseCode = connection.getResponseCode();
+        if (responseCode != HttpURLConnection.HTTP_OK) {
+            throw new IOException("Error sending metric to Datadog: " + responseCode);
+        }
+    }
+
+    private JsonArray buildTagsJson(Attributes attributes) {
+        JsonArray tagsArray = new JsonArray();
+        for (String key : attributes.getKeys()) {
+            JsonObject tagObject = new JsonObject();
+            tagObject.addProperty(key, attributes.get(key));
+            tagsArray.add(tagObject);
+        }
+        return tagsArray;
+    }
+
+    @Override
+    public CompletableResultCode flush() {
+        return CompletableResultCode.ofSuccess();
+    }
+
+    @Override
+    public CompletableResultCode shutdown() {
+        return CompletableResultCode.ofSuccess();
+    }
+}
+```
