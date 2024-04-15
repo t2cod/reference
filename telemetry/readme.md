@@ -151,3 +151,22 @@ public class CustomMetricExample {
 }
 ```
 opentelemetry-exporter-datadog
+
+
+
+
+If you're unable to download the opentelemetry-exporter-datadog artifact from the Maven repositories, you can manually copy the artifact to your local Maven repository.
+
+Here are the steps to do that:
+
+Download the opentelemetry-exporter-datadog artifact from the Sonatype Nexus repository:
+Go to the Sonatype Nexus repository: https://oss.sonatype.org/content/repositories/snapshots/io/opentelemetry/exporter/opentelemetry-exporter-datadog/
+Find the latest version of the artifact (e.g., 1.19.0-SNAPSHOT) and download the JAR file.
+Locate your local Maven repository directory. The default location is usually:
+Windows: %USERPROFILE%\.m2\repository
+macOS/Linux: ~/.m2/repository
+Navigate to the correct directory structure within your local Maven repository:
+io/opentelemetry/exporter/opentelemetry-exporter-datadog/1.19.0-SNAPSHOT/
+Create the directories if they don't already exist.
+Copy the downloaded opentelemetry-exporter-datadog-1.19.0-SNAPSHOT.jar file to the directory you created in the previous step.
+Update your project's pom.xml file to reference the local artifact:
