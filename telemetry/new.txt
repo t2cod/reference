@@ -1,0 +1,38 @@
+import com.datadoghq.api.ApiException;
+import com.datadoghq.api.models.Metric;
+import com.datadoghq.api.models.MetricsApi;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import static org.mockito.Mockito.*;
+
+@ExtendWith(MockitoExtension.class)
+public class DatadogMetricExampleTest {
+
+    @Mock
+    private MetricsApi metricsApi;
+
+    @InjectMocks
+    private DatadogService datadogService;
+
+    @Test
+    public void testValueSend() throws ApiException {
+        // Arrange
+        String metricName = "custom.metric.name";
+        double metricValue = 42.0;
+        long currentTime = System.currentTimeMillis() / 1000;
+
+        // Mock the submitMetrics method
+        Metric mockMetric = new Metric();
+        when(metricsApi.submitMetrics(any())).thenReturn(mockMetric);
+
+        // Act
+        DatadogMetricExample.valueSend();
+
+        // Assert
+        verify(metricsApi, times(1)).submitMetrics(any());
+    }
+}
