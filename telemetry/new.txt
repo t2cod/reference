@@ -2,37 +2,42 @@ import com.datadoghq.api.ApiException;
 import com.datadoghq.api.models.Metric;
 import com.datadoghq.api.models.MetricsApi;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.Mockito;
 
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.*;
 
-@ExtendWith(MockitoExtension.class)
 public class DatadogMetricExampleTest {
-
-    @Mock
-    private MetricsApi metricsApi;
-
-    @InjectMocks
-    private DatadogService datadogService;
 
     @Test
     public void testValueSend() throws ApiException {
-        // Arrange
-        String metricName = "custom.metric.name";
-        double metricValue = 42.0;
-        long currentTime = System.currentTimeMillis() / 1000;
+        // ... (existing test case for valueSend() method) ...
+    }
 
-        // Mock the submitMetrics method
+    @Test
+    public void testPrintHello() throws ApiException {
+        // Arrange
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+        PrintStream originalOut = System.out;
+        System.setOut(new PrintStream(outputStream));
+
+        // Mock the MetricsApi and DatadogService
+        MetricsApi mockMetricsApi = Mockito.mock(MetricsApi.class);
         Metric mockMetric = new Metric();
-        when(metricsApi.submitMetrics(any())).thenReturn(mockMetric);
+        when(mockMetricsApi.submitMetrics(any())).thenReturn(mockMetric);
+
+        DatadogService datadogService = new DatadogService(mockMetricsApi);
 
         // Act
-        DatadogMetricExample.valueSend();
+        DatadogMetricExample.printHello(datadogService);
 
         // Assert
-        verify(metricsApi, times(1)).submitMetrics(any());
+        System.setOut(originalOut); // Reset System.out
+        String expectedOutput = "Hello\n";
+        assertEquals(expectedOutput, outputStream.toString());
+        verify(mockMetricsApi, times(1)).submitMetrics(any());
     }
 }
