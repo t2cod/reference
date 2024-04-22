@@ -1,0 +1,248 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans
+                           http://www.springframework.org/schema/beans/spring-beans.xsd">
+
+  <bean id="apiClient" class="com.datadog.api.client.ApiClient"/>
+
+  <bean id="metricService" class="metricservice.RealMetricService">
+    <constructor-arg ref="apiClient"/>
+  </bean>
+
+  <bean id="myService" class="yourpackage.MyService">
+    <constructor-arg ref="metricService"/>
+  </bean>
+
+  <bean id="myEventListener" class="yourpackage.MyEventListener">
+    <constructor-arg ref="metricService"/>
+  </bean>
+
+</beans>
+
+
+package yourpackage;
+
+import metricservice.Metric;
+import metricservice.MetricService;
+
+@Component // Assuming Spring managed component
+public class MyService {
+
+  @Autowired
+  private MetricService metricService;
+
+  public void doSomething() {
+    // ... (your service logic)
+    
+    Metric metric = new Metric(
+      "service.operation.count",
+      "GAUGE",
+      1.0,
+      OffsetDateTime.now(),
+      Collections.emptyList());
+
+    metricService.submitMetric(metric);
+  }
+}
+
+package yourpackage;
+
+import metricservice.Metric;
+import metricservice.MetricService;
+
+@Component // Assuming Spring managed component
+public class MyEventListener implements MyEvent.Listener {
+
+  private final MetricService metricService;
+
+  @Autowired
+  public MyEventListener(MetricService metricService) {
+    this.metricService = metricService;
+  }
+
+  @Override
+  public void onEvent(MyEvent event) {
+    // ... (your event handling logic)
+
+    Metric metric = new Metric(
+      "event.count",
+      "COUNTER",
+      1.0, // Increment by 1 for each event
+      OffsetDateTime.now(),
+      Collections.emptyList());
+
+    metricService.submitMetric(metric);
+  }
+}
+
+
+
+metricservice/
+  Metric.java
+  MetricService.java
+  RealMetricService.java
+  MockMetricService.java
+yourpackage/ (replace with your actual package)
+  MyService.java (or any class using MetricService)
+  MyEventListener.java (or any class using MetricService)
+test/ (optional for unit tests)
+  MyEventListenerTest.java
+
+
+metricservice/Metric.java:
+
+package metricservice;
+
+public class Metric {
+
+  private final String metric;
+  private final String type;
+  private final double value;
+  private final OffsetDateTime timestamp;
+  private final List<Map<String, String>> resources;
+
+  public Metric(String metric, String type, double value, OffsetDateTime timestamp, List<Map<String, String>> resources) {
+    this.metric = metric;
+    this.type = type;
+    this.value = value;
+    this.timestamp = timestamp;
+    this.resources = resources;
+  }
+
+  public String getMetric() {
+    return metric;
+  }
+
+  public String getType() {
+    return type;
+  }
+
+  public double getValue() {
+    return value;
+  }
+
+  public OffsetDateTime getTimestamp() {
+    return timestamp;
+  }
+
+  public List<Map<String, String>> getResources() {
+    return resources;
+  }
+}
+
+metricservice/MetricService.java:
+
+package metricservice;
+
+public interface MetricService {
+  void submitMetric(Metric metric);
+}
+
+metricservice/RealMetricService.java:
+package metricservice;
+
+import com.datadog.api.client.ApiClient;
+import com.datadog.api.client.ApiException;
+import com.datadog.api.client.v2.api.MetricsApi;
+import com.datadog.api.client.v2.model.IntakePayloadAccepted;
+import com.datadog.api.client.v2.model.MetricIntakeType;
+import com.datadog.api.client.v2.model.MetricPayload;
+import com.datadog.api.client.v2.model.MetricPoint;
+import com.datadog.api.client.v2.model.MetricResource;
+import com.datadog.api.client.v2.model.MetricSeries;
+import java.time.OffsetDateTime;
+import java.util.Collections;
+
+public class RealMetricService implements MetricService {
+
+  private final ApiClient apiClient;
+
+  public RealMetricService(ApiClient apiClient) {
+    this.apiClient = apiClient;
+  }
+
+  @Override
+  public void submitMetric(Metric metric) {
+    // Integrate with actual Datadog API logic here
+    MetricsApi apiInstance = new MetricsApi(apiClient);
+    
+    MetricPayload body = new MetricPayload()
+      .series(Collections.singletonList(
+          new MetricSeries()
+              .metric(metric.getMetric())
+              .type(MetricIntakeType.valueOf(metric.getType())) // Handle type conversion
+              .points(Collections.singletonList(
+                  new MetricPoint()
+                      .timestamp(metric.getTimestamp().toInstant().getEpochSecond())
+                      .value(metric.getValue())))
+              .resources(metric.getResources())));
+
+    try {
+      IntakePayloadAccepted result = apiInstance.submitMetrics(body);
+      System.out.println(result);
+    } catch (ApiException e) {
+      // Handle API exceptions
+      System.err.println("Exception when calling MetricsApi#submitMetrics");
+      System.err.println("Status code: " + e.getCode());
+      System.err.println("Reason: " + e.getResponseBody());
+      System.err.println("Response headers: " + e.getResponseHeaders());
+      e.printStackTrace();
+    }
+  }
+}
+
+
+
+
+
+*******************
+metricservice/MockMetricService.java:
+
+package metricservice;
+
+public class MockMetricService implements MetricService {
+
+  @Override
+  public void submitMetric(Metric metric) {
+    // Simulate API interaction for testing
+    System.out.println(f"Submitting metric: {metric.getMetric()} ({metric.getType()})");
+    System.out.println(f"Value: {metric.getValue()} at {metric.getTimestamp()}");
+    System.out.println(f"Resources: {metric.getResources()}");
+  }
+}
+
+
+
+
+*****************
+Test
+
+@RunWith(MockitoJUnitRunner.class)
+public class MyEventListenerTest {
+
+  @Mock
+  private MetricService mockMetricService;
+
+  @Test
+  public void testOnEvent_submitsMetric() {
+    MyEvent mockEvent = Mockito.mock(MyEvent.class);
+    MyEventListener listener = new MyEventListener(mockMetricService);
+
+    listener.onEvent(mockEvent);
+
+    // Verify that submitMetric is called on the mock MetricService with the expected Metric object
+    Metric expectedMetric = new Metric(
+        "event.count",
+        "COUNTER",
+        1.0, // Increment by 1 for each event
+        OffsetDateTime.now(),
+        Collections.emptyList());
+    Mockito.verify(mockMetricService).submitMetric(expectedMetric);
+  }
+}
+
+
+
+
+
